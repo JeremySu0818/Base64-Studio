@@ -18,7 +18,7 @@ Both versions share the same functionality.
 
 ## Installation
 
-1. Download the latest release from [Releases](./releases).
+1. Download the latest release from [Releases](https://github.com/JeremySu0818/Base64-Studio/releases).
 2. Run the installer `Base64StudioSetup.exe`.
 3. During installation, you can choose which version to install:
 
@@ -92,7 +92,7 @@ Base64 Studio 是一款基於 **Python + PyQt5** 開發的簡單且功能強大�
 
 ## 安裝方式
 
-1. 從 [Releases](./releases) 下載最新版本。
+1. 從 [Releases](https://github.com/JeremySu0818/Base64-Studio/releases) 下載最新版本。
 2. 執行安裝程式 `Base64StudioSetup.exe`。
 3. 安裝過程中可選擇要安裝的版本：
 
