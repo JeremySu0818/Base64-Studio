@@ -38,7 +38,7 @@ If you want to build your own `.exe`:
 
 ```bash
 pip install pyqt5 pyinstaller
-pyinstaller --noconsole --onefile base64_studio.py
+pyinstaller --noconsole --onefile base64_studio_English.py
 ```
 
 ---
@@ -95,7 +95,7 @@ Base64 Studio 是一款基於 **Python + PyQt5** 開發的簡單且功能強大�
 
 ```bash
 pip install pyqt5 pyinstaller
-pyinstaller --noconsole --onefile base64_studio.py
+pyinstaller --noconsole --onefile base64_studio_Chiness.py
 ```
 
 ---
