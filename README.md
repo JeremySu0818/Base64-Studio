@@ -7,13 +7,6 @@ Base64 Studio is a simple and powerful desktop tool built with **Python + PyQt5*
 * Decode **Base64 → ZIP → Extract or Save**
 * Copy results quickly with one click
 
-Two versions are provided:
-
-* **Chinese UI** → `Base64 Studio_Chiness.exe`
-* **English UI** → `Base64 Studio_English.exe`
-
-Both versions share the same functionality.
-
 ---
 
 ## Installation
@@ -45,30 +38,20 @@ If you want to build your own `.exe`:
 
 ```bash
 pip install pyqt5 pyinstaller
-pyinstaller --noconsole --onefile --icon=icon.ico base64_studio_English.py
+pyinstaller --noconsole --onefile base64_studio.py
 ```
 
 ---
 
 ## Files in Release
 
-* `Base64 Studio_Chiness.exe` → Chinese UI version
-* `Base64 Studio_English.exe` → English UI version
-* `icon.ico` → App icon
-* `Base64StudioSetup.exe` → Installer with language selection
+* `Base64StudioSetup.exe` → Installer with language selection (Chinese or English)
 
 ---
 
 ## License
 
-MIT License. Free to use, modify, and distribute.
-
----
-
-## Credits
-
-Developed using **Python 3.11 + PyQt5**.
-Special thanks to the open-source community.
+Unlicense. Free to use, modify, and distribute without restriction.
 
 ---
 
@@ -80,13 +63,6 @@ Base64 Studio 是一款基於 **Python + PyQt5** 開發的簡單且功能強大�
 * 壓縮並編碼 **檔案/資料夾 → ZIP → Base64**
 * 解碼 **Base64 → ZIP → 解壓縮或另存**
 * 一鍵快速複製結果
-
-提供兩個版本：
-
-* **中文介面** → `Base64 Studio_Chiness.exe`
-* **英文介面** → `Base64 Studio_English.exe`
-
-兩個版本功能完全相同。
 
 ---
 
@@ -119,27 +95,17 @@ Base64 Studio 是一款基於 **Python + PyQt5** 開發的簡單且功能強大�
 
 ```bash
 pip install pyqt5 pyinstaller
-pyinstaller --noconsole --onefile --icon=icon.ico base64_studio_Chiness.py
+pyinstaller --noconsole --onefile base64_studio.py
 ```
 
 ---
 
 ## 發布檔案清單
 
-* `Base64 Studio_Chiness.exe` → 中文介面版本
-* `Base64 Studio_English.exe` → 英文介面版本
-* `icon.ico` → 應用程式圖示
 * `Base64StudioSetup.exe` → 可選語言版本的安裝程式
 
 ---
 
 ## 授權
 
-MIT 授權，允許自由使用、修改與散佈。
-
----
-
-## 致謝
-
-使用 **Python 3.11 + PyQt5** 開發。
-特別感謝開源社群的支持。
+Unlicense，允許自由使用、修改與散佈，無任何限制。
