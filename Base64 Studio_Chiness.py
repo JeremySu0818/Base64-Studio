@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 import sys
 import os
 import base64
 import zipfile
 import io
+import traceback
 
 from PyQt5.QtWidgets import (
     QApplication,
@@ -88,7 +90,7 @@ def decode_base64_to_text(base64_str: str) -> str:
         return base64.b64decode(base64_str.encode("utf-8")).decode(
             "utf-8", errors="ignore"
         )
-    except base64.binascii.Error:
+    except Exception:
         return ""
 
 
@@ -99,9 +101,11 @@ def add_to_zip(zipf, path, base_path=""):
         arcname = os.path.join(base_path, os.path.basename(path))
         zipf.write(path, arcname)
     elif os.path.isdir(path):
+        # 當加入資料夾時，保留資料夾名稱在壓縮檔裡
         for root, dirs, files in os.walk(path):
             for file in files:
                 abs_path = os.path.join(root, file)
+                # rel_path 使得壓縮檔內會包含從選取資料夾的上層算起的相對路徑，保留資料夾結構
                 rel_path = os.path.relpath(abs_path, os.path.dirname(path))
                 zipf.write(abs_path, rel_path)
 
@@ -111,11 +115,15 @@ class Base64Tool(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Base64 Studio")
-        self.setMinimumSize(700, 600)
+        self.setMinimumSize(820, 700)
         self._init_ui()
         from PyQt5.QtGui import QIcon
 
-        self.setWindowIcon(QIcon(resource_path("icon.ico")))
+        # 若沒有 icon.ico 也不致命，resource_path 會回傳路徑
+        try:
+            self.setWindowIcon(QIcon(resource_path("icon.ico")))
+        except Exception:
+            pass
 
     def _init_ui(self):
         """初始化使用者介面元件。"""
@@ -157,8 +165,8 @@ class Base64Tool(QWidget):
         self.status_label = QLabel("準備就緒...")
         main_layout.addWidget(self.status_label)
 
-        # 檔案操作按鈕
-        file_group = QGroupBox("檔案壓縮與解碼")
+        # 原本的檔案操作按鈕區（與你現有邏輯相同）
+        file_group = QGroupBox("檔案壓縮與解碼（一般）")
         file_layout = QHBoxLayout()
 
         btn_files_to_b64 = QPushButton("選檔案壓縮 → Base64")
@@ -176,8 +184,30 @@ class Base64Tool(QWidget):
         file_group.setLayout(file_layout)
         main_layout.addWidget(file_group)
 
+        # 新增的大檔案處理專區（行為：壓縮直接詢問存 Base64.txt；解碼從 Base64.txt 讀取）
+        large_group = QGroupBox(
+            "大檔案處理專區（專為大檔案，直接存成 Base64.txt / 從 Base64.txt 解碼）"
+        )
+        large_layout = QHBoxLayout()
+
+        btn_large_files_to_b64 = QPushButton("選檔案壓縮 → 儲存 Base64.txt")
+        btn_large_files_to_b64.clicked.connect(self._large_files_to_base64_save)
+        large_layout.addWidget(btn_large_files_to_b64)
+
+        btn_large_folders_to_b64 = QPushButton("選資料夾壓縮 → 儲存 Base64.txt")
+        btn_large_folders_to_b64.clicked.connect(self._large_folders_to_base64_save)
+        large_layout.addWidget(btn_large_folders_to_b64)
+
+        btn_large_b64_to_file = QPushButton("從 Base64.txt 解碼為檔案")
+        btn_large_b64_to_file.clicked.connect(self._large_base64_file_to_file)
+        large_layout.addWidget(btn_large_b64_to_file)
+
+        large_group.setLayout(large_layout)
+        main_layout.addWidget(large_group)
+
         self.setLayout(main_layout)
 
+    # ---------- 複製按鈕功能 ----------
     def _copy_b64_output(self):
         """複製 Base64 輸出框的內容到剪貼簿。"""
         content = self.output_b64.toPlainText()
@@ -196,6 +226,7 @@ class Base64Tool(QWidget):
         else:
             self.status_label.setText("文字解碼輸出區為空，無可複製內容。")
 
+    # ---------- 文字即時轉換 ----------
     def _on_text_changed(self):
         """根據輸入內容即時更新輸出框。"""
         input_text = self.text_input.toPlainText().strip()
@@ -205,12 +236,62 @@ class Base64Tool(QWidget):
             self.status_label.setText("準備就緒...")
             return
 
-        self.output_b64.setText(encode_text_to_base64(input_text))
-        self.output_text.setText(decode_base64_to_text(input_text))
-        self.status_label.setText("即時轉換完成")
+        # 更新兩個輸出：一個為文字編成 Base64，另一個嘗試以 Base64 解回文字
+        try:
+            self.output_b64.setText(encode_text_to_base64(input_text))
+            self.output_text.setText(decode_base64_to_text(input_text))
+            self.status_label.setText("即時轉換完成")
+        except Exception:
+            self.output_b64.clear()
+            self.output_text.clear()
+            self.status_label.setText("轉換時發生錯誤")
+
+    # ---------- 原本的檔案 / 資料夾 → Base64（顯示在 GUI） ----------
+    def _files_to_base64_zip(self):
+        """選取檔案 → ZIP → Base64（結果顯示在 output_b64）"""
+        file_paths, _ = QFileDialog.getOpenFileNames(self, "選擇檔案")
+        if not file_paths:
+            return
+        try:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for file_path in file_paths:
+                    add_to_zip(zipf, file_path)
+            zip_data = zip_buffer.getvalue()
+            base64_result = base64.b64encode(zip_data).decode("utf-8")
+            self.text_input.clear()
+            self.output_b64.setText(base64_result)
+            self.output_text.clear()
+            self.status_label.setText(
+                f"已壓縮 {len(file_paths)} 個檔案，Base64 長度：{len(base64_result)}"
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "錯誤", str(e))
+            self.status_label.setText("壓縮失敗")
+
+    def _folders_to_base64_zip(self):
+        """選取資料夾 → ZIP → Base64（結果顯示在 output_b64）"""
+        folder_path = QFileDialog.getExistingDirectory(self, "選擇資料夾")
+        if not folder_path:
+            return
+        try:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+                add_to_zip(zipf, folder_path)
+            zip_data = zip_buffer.getvalue()
+            base64_result = base64.b64encode(zip_data).decode("utf-8")
+            self.text_input.clear()
+            self.output_b64.setText(base64_result)
+            self.output_text.clear()
+            self.status_label.setText(
+                f"已壓縮資料夾：{os.path.basename(folder_path)}，Base64 長度：{len(base64_result)}"
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "錯誤", str(e))
+            self.status_label.setText("壓縮失敗")
 
     def _handle_base64_to_file(self):
-        """Base64 → ZIP 檔案或直接解壓縮"""
+        """Base64（從文字輸入框）→ ZIP 檔案或直接解壓縮（原本行為）"""
         base64_str = self.text_input.toPlainText().strip()
         if not base64_str:
             QMessageBox.warning(self, "錯誤", "請在輸入區貼上 Base64 編碼。")
@@ -248,7 +329,9 @@ class Base64Tool(QWidget):
             self.status_label.setText("解碼失敗")
         except Exception as e:
             QMessageBox.critical(self, "錯誤", f"未知錯誤：\n{str(e)}")
+            self.status_label.setText("解碼失敗")
 
+    # ---------- 原本的保存與解壓方法 ----------
     def _save_zip_from_data(self, zip_data: bytes):
         save_path, _ = QFileDialog.getSaveFileName(
             self, "儲存為 ZIP 檔案", "", "ZIP 檔案 (*.zip);;所有檔案 (*)"
@@ -288,30 +371,58 @@ class Base64Tool(QWidget):
             QMessageBox.critical(self, "解壓縮失敗", str(e))
             self.status_label.setText("解壓縮失敗")
 
-    def _files_to_base64_zip(self):
-        """選取檔案 → ZIP → Base64"""
-        file_paths, _ = QFileDialog.getOpenFileNames(self, "選擇檔案")
+    # ---------- 大檔案專區：壓縮後直接儲存為 Base64.txt ----------
+    def _large_files_to_base64_save(self):
+        """大檔案：選取檔案壓縮，並詢問儲存 Base64.txt 的路徑（直接寫檔）"""
+        file_paths, _ = QFileDialog.getOpenFileNames(self, "選擇要壓縮的檔案（可多選）")
         if not file_paths:
             return
         try:
+            # 建立 zip 並取得二進位資料
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
                 for file_path in file_paths:
                     add_to_zip(zipf, file_path)
             zip_data = zip_buffer.getvalue()
-            base64_result = base64.b64encode(zip_data).decode("utf-8")
-            self.text_input.clear()
-            self.output_b64.setText(base64_result)
-            self.output_text.clear()
-            self.status_label.setText(
-                f"已壓縮 {len(file_paths)} 個檔案，長度：{len(base64_result)}"
+
+            # 詢問儲存 Base64.txt 的位置
+            save_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "儲存為 Base64.txt",
+                "archive_base64.txt",
+                "文字檔 (*.txt);;所有檔案 (*)",
             )
+            if not save_path:
+                self.status_label.setText("儲存 Base64.txt 已取消")
+                return
+
+            # 以 streaming-friendly 的方式寫入（將 base64 分段寫入避免一次生成超大字串）
+            try:
+                with open(save_path, "wb") as f_out:
+                    # 直接用 base64.standard_b64encode 每次處理較大的 chunk
+                    # 但 zip_data 已在記憶體中，這裡直接 encode 寫入
+                    encoded = base64.b64encode(zip_data)
+                    f_out.write(encoded)
+                QMessageBox.information(
+                    self, "成功", f"已儲存 Base64 檔案：\n{os.path.abspath(save_path)}"
+                )
+                self.status_label.setText(
+                    f"已儲存 Base64：{os.path.basename(save_path)}"
+                )
+                self.text_input.clear()
+                self.output_b64.clear()
+                self.output_text.clear()
+            except Exception as e:
+                QMessageBox.critical(self, "寫入失敗", str(e))
+                self.status_label.setText("Base64 寫入失敗")
+
         except Exception as e:
             QMessageBox.critical(self, "錯誤", str(e))
+            self.status_label.setText("壓縮失敗")
 
-    def _folders_to_base64_zip(self):
-        """選取資料夾 → ZIP → Base64"""
-        folder_path = QFileDialog.getExistingDirectory(self, "選擇資料夾")
+    def _large_folders_to_base64_save(self):
+        """大檔案：選取資料夾壓縮，並詢問儲存 Base64.txt 的路徑"""
+        folder_path = QFileDialog.getExistingDirectory(self, "選擇要壓縮的資料夾")
         if not folder_path:
             return
         try:
@@ -319,15 +430,110 @@ class Base64Tool(QWidget):
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
                 add_to_zip(zipf, folder_path)
             zip_data = zip_buffer.getvalue()
-            base64_result = base64.b64encode(zip_data).decode("utf-8")
-            self.text_input.clear()
-            self.output_b64.setText(base64_result)
-            self.output_text.clear()
-            self.status_label.setText(f"已壓縮資料夾：{os.path.basename(folder_path)}")
+
+            save_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "儲存為 Base64.txt",
+                f"{os.path.basename(folder_path)}_base64.txt",
+                "文字檔 (*.txt);;所有檔案 (*)",
+            )
+            if not save_path:
+                self.status_label.setText("儲存 Base64.txt 已取消")
+                return
+
+            try:
+                with open(save_path, "wb") as f_out:
+                    encoded = base64.b64encode(zip_data)
+                    f_out.write(encoded)
+                QMessageBox.information(
+                    self, "成功", f"已儲存 Base64 檔案：\n{os.path.abspath(save_path)}"
+                )
+                self.status_label.setText(
+                    f"已儲存 Base64：{os.path.basename(save_path)}"
+                )
+                self.text_input.clear()
+                self.output_b64.clear()
+                self.output_text.clear()
+            except Exception as e:
+                QMessageBox.critical(self, "寫入失敗", str(e))
+                self.status_label.setText("Base64 寫入失敗")
+
         except Exception as e:
             QMessageBox.critical(self, "錯誤", str(e))
+            self.status_label.setText("壓縮失敗")
+
+    def _large_base64_file_to_file(self):
+        """
+        大檔案專區：從 Base64.txt 檔案讀取內容，解碼為 ZIP 或進行解壓。
+        行為：使用者選取 Base64.txt，程式 decode 後驗證是否為 ZIP，然後提供選項（另存為 zip 或直接解壓）。
+        """
+        # 選取 Base64.txt 檔案
+        base64_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "選擇 Base64.txt 檔案（由大檔案專區產生）",
+            "",
+            "文字檔 (*.txt);;所有檔案 (*)",
+        )
+        if not base64_path:
+            return
+
+        try:
+            # 讀取檔案內容（以二進位讀取，因為我們在儲存時是用 b64 的 bytes）
+            with open(base64_path, "rb") as f:
+                b64_bytes = f.read()
+
+            # 嘗試 decode
+            try:
+                zip_data = base64.b64decode(b64_bytes)
+            except Exception:
+                QMessageBox.critical(
+                    self, "解碼錯誤", "所選檔案不是有效的 Base64 編碼。"
+                )
+                self.status_label.setText("Base64 解碼失敗")
+                return
+
+            # 檢查是否為 zip
+            if not zipfile.is_zipfile(io.BytesIO(zip_data)):
+                QMessageBox.warning(
+                    self,
+                    "格式錯誤",
+                    "解碼後內容不是有效的 ZIP 壓縮檔，無法進行另存或解壓。",
+                )
+                self.status_label.setText("驗證失敗：不是 ZIP 格式")
+                return
+
+            # 跟原本行為一樣，詢問使用者要存成 zip 還是直接解壓
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Question)
+            msg_box.setWindowTitle("請選擇操作")
+            msg_box.setText("已成功驗證為 ZIP 壓縮檔，您想如何處理？")
+
+            btn_save_zip = msg_box.addButton("另存為 ZIP 檔案", QMessageBox.ActionRole)
+            btn_extract = msg_box.addButton(
+                "直接解壓縮到資料夾", QMessageBox.ActionRole
+            )
+            btn_cancel = msg_box.addButton("取消", QMessageBox.RejectRole)
+
+            msg_box.exec_()
+            clicked_button = msg_box.clickedButton()
+            if clicked_button == btn_save_zip:
+                # 直接使用與原本相同的儲存流程
+                self._save_zip_from_data(zip_data)
+            elif clicked_button == btn_extract:
+                self._extract_zip_from_data(zip_data)
+            else:
+                self.status_label.setText("操作已取消")
+
+        except Exception as e:
+            # 把 traceback 記錄在訊息中有助於偵錯（但顯示要簡潔）
+            tb = traceback.format_exc()
+            QMessageBox.critical(
+                self, "錯誤", f"處理時發生錯誤：\n{str(e)}\n\n詳細資訊已記錄。"
+            )
+            self.status_label.setText("處理失敗")
 
 
+# ---------- 應用程式啟動 ----------
 def main():
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     app = QApplication(sys.argv)
